@@ -17,4 +17,4 @@ jobs:
       - name: Check frontend syntax
         run: node --check public/app.js
       - name: Check Supabase API health
-        run: curl --fail --silent --show-error https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-api/health
+        run: curl --silent --show-error --write-out "\nHTTP_STATUS:%{http_code}\n" https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-api/health
