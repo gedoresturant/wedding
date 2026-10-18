@@ -96,20 +96,22 @@ Deno.serve(async (req: Request) => {
       }
       const [{ data: customer, error: customerError }, { data: hall, error: hallError }] = await Promise.all([
         admin.from("customers").select("id").eq("id", customerId).eq("company_id", companyId).maybeSingle(),
-        admin.from("halls").select("id").eq("id", hallId).eq("company_id", companyId).eq("active", 1).maybeSingle(),
+        admin.from("halls").select("id,capacity").eq("id", hallId).eq("company_id", companyId).eq("active", 1).maybeSingle(),
       ]);
       if (customerError) throw customerError;
       if (hallError) throw hallError;
       if (!customer || !hall) return reply(400, { error: "العميل أو القاعة غير موجودين ضمن الشركة" });
+      const guestCount = Math.max(0, Number(input.guest_count ?? 0));
+      if (Number(hall.capacity ?? 0) > 0 && guestCount > Number(hall.capacity)) return reply(400, { error: `سعة القاعة ${hall.capacity} فرد فقط` });
       const { data: conflicts, error: conflictError } = await admin.from("bookings").select("id")
         .eq("company_id", companyId).eq("hall_id", hallId).eq("event_date", eventDate)
-        .eq("event_period", eventPeriod).or("deleted_at.is.null,deleted_at.eq.").limit(1);
+        .eq("event_period", eventPeriod).not("status", "in", '("ملغي","مرفوض")').or("deleted_at.is.null,deleted_at.eq.").limit(1);
       if (conflictError) throw conflictError;
       if (conflicts?.length) return reply(409, { error: "القاعة محجوزة بالفعل في نفس التاريخ والفترة" });
       const { data, error } = await admin.from("bookings").insert({
         company_id: companyId, customer_id: customerId, hall_id: hallId,
         event_date: eventDate, event_period: eventPeriod,
-        guest_count: Math.max(0, Number(input.guest_count ?? 0)),
+        guest_count: guestCount,
         event_type: String(input.event_type ?? "حفل زفاف"),
         contract_total: Math.max(0, Number(input.contract_total ?? 0)),
         base_contract_total: Math.max(0, Number(input.contract_total ?? 0)),
