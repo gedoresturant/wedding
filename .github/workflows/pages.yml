@@ -1,7 +1,7 @@
 name: Deploy Wedding ERP to GitHub Pages
 on:
   push:
-    branches: [feat/github-pages-supabase-only]
+    branches: [main, feat/github-pages-supabase-only]
   pull_request:
     branches: [main]
   workflow_dispatch:
