@@ -1,3 +1,4 @@
+// Online Supabase ERP
 const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const state = {user:null,company:null,page:'dashboard',halls:[],customers:[],bookings:[],modalBusy:false};
