@@ -1,0 +1,93 @@
+}</div>${table(['العميل / أصحاب المناسبة','الموبايل','المكان / القاعة','التاريخ','الحالة','إجراء'],rows)}</section>`;
+ $('#customerSearchBtn').onclick=renderCustomers;$('#customerSearch').onkeydown=e=>{if(e.key==='Enter')renderCustomers()};$('#customerStatus').onchange=renderCustomers;
+}
+window.openNewBooking=async function(customerId=null){try{return await newBooking(customerId)}catch(err){console.error('Open booking failed:',err);toast('حدث خطأ أثناء فتح الحجز: '+(err?.message||'خطأ غير متوقع'),true)}};
+async function newCustomer(initialStatus='new'){
+ const halls=await getHalls();
+ const fields=field('اسم العميل','name','text','',{required:true})+field('الموبايل','phone','tel','',{required:true,placeholder:'01xxxxxxxxx'})+
+ `<div class="field full-width"><label>أسماء أصحاب المناسبة (اختياري)</label><div class="field-grid">${field('اسم العريس','groom_name')}${field('اسم العروسة','bride_name')}</div></div>`+
+ field('المكان','venue')+field('القاعة المطلوبة','hall_id','select','',{options:[{value:'',label:'غير محددة'},...halls.map(h=>({value:h.id,label:h.name+' · '+h.venue}))]})+
+ field('نوع المناسبة','event_type','select','حفل زفاف',{options:['حفل زفاف','خطوبة','كتب كتاب','عيد ميلاد','حفل تخرج','مؤتمر','أخرى'].map(x=>({value:x,label:x}))})+
+ field('تاريخ المناسبة','event_date','date')+field('الفترة','event_period','select','',{options:[{value:'',label:'غير محدد'},{value:'نهاري',label:'نهاري'},{value:'مسائي',label:'مسائي'}]})+
+ field('مصدر العميل','source','select','',{options:['','زيارة مباشرة','اتصال','Facebook','Instagram','WhatsApp','إحالة','إعلان','أخرى'].map(x=>({value:x,label:x||'اختر المصدر'}))})+
+ field('الحالة','status','select',initialStatus,{options:[['new','استفسار جديد'],['interested','مهتم'],['visit','زيارة مباشرة'],['initial','حجز مبدئي'],['booked','تم الحجز'],['lost','لم يتم الحجز']].map(([value,label])=>({value,label}))})+
+ field('الميزانية المتوقعة','budget','number','',{min:0,step:'0.01'})+field('موعد المتابعة','next_followup','date')+field('ملاحظات العميل','notes','textarea','',{full:true});
+ formModal('تسجيل عميل جديد',fields,'حفظ العميل',async d=>{await api('/customers',{method:'POST',body:d});toast('تم حفظ العميل بنجاح')});
+}
+async function editCustomer(id){
+ const c=await api('/customers');const item=c.find(x=>x.id===id);if(!item)return toast('العميل غير موجود',true);
+ const halls=await getHalls();
+ const fields=field('اسم العميل','name','text',item.name,{required:true})+field('الموبايل','phone','tel',item.phone,{required:true})+field('اسم العريس','groom_name','text',item.groom_name)+field('اسم العروسة','bride_name','text',item.bride_name)+field('المكان','venue','text',item.venue)+field('القاعة','hall_id','select',item.hall_id||'',{options:[{value:'',label:'غير محددة'},...halls.map(h=>({value:h.id,label:h.name}))]})+field('نوع المناسبة','event_type','text',item.event_type)+field('تاريخ المناسبة','event_date','date',item.event_date)+field('الفترة','event_period','select',item.event_period,{options:[{value:'',label:'غير محدد'},{value:'نهاري',label:'نهاري'},{value:'مسائي',label:'مسائي'}]})+field('المصدر','source','text',item.source)+field('الحالة','status','select',item.status,{options:[['new','استفسار جديد'],['interested','مهتم'],['visit','زيارة مباشرة'],['initial','حجز مبدئي'],['booked','تم الحجز'],['lost','لم يتم الحجز']].map(([value,label])=>({value,label}))})+field('الميزانية','budget','number',item.budget,{min:0})+field('موعد المتابعة','next_followup','date',item.next_followup)+field('ملاحظات','notes','textarea',item.notes,{full:true});
+ formModal('تعديل بيانات العميل',fields,'حفظ التعديلات',async d=>{await api('/customers/'+id,{method:'PUT',body:d});toast('تم تحديث العميل')});
+}
+async function archiveBooking(id){
+ if(!hasPermission('bookingDelete')){toast('ليس لديك صلاحية حذف الحجوزات',true);return}
+ if(!confirm(`تأكيد أرشفة الحجز رقم ${id}؟\nسيختفي من القائمة، مع الاحتفاظ بالإيصالات والسجلات المالية للمراجعة.`))return;
+ const reason=prompt('اكتب سبب حذف/أرشفة الحجز (مطلوب):');
+ if(reason===null)return;
+ if(!reason.trim()){toast('سبب الأرشفة مطلوب',true);return}
+ try{await api('/bookings/'+id+'/archive',{method:'POST',body:{reason:reason.trim()}});toast('تمت أرشفة الحجز مع الاحتفاظ بالسجلات المالية');await renderBookings()}
+ catch(e){toast(e.message||'تعذر أرشفة الحجز',true)}
+}
+async function renderBookings(){
+ const q=$('#bookingSearch')?.value||'',status=state.user.role==='accountant'?'مؤكد':($('#bookingStatus')?.value||'all');const data=await api('/bookings?'+new URLSearchParams({q,status}));state.bookings=data;
+ const rows=data.map(b=>`<tr><td><strong>${escapeHtml(b.customer_name)}</strong><br><small>${escapeHtml(b.phone)}</small></td><td>${escapeHtml(b.hall_name)}<br><small>${escapeHtml(b.venue||'')}</small></td><td>${dateFmt(b.event_date)} · ${escapeHtml(b.event_period)}</td><td>${b.guest_count||0}</td><td>${money(b.total_due??((b.contract_total-b.discount)*1.15))}</td><td>${money(b.paid_total)}</td><td><strong>${money(b.remaining)}</strong></td><td>${badge(b.status)}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn primary" onclick="openBooking(${b.id})">فتح الحساب</button>${hasPermission('bookingDelete')?`<button class="btn danger" onclick="archiveBooking(${b.id})">حذف الحجز</button>`:''}</div></td></tr>`).join('');
+ const headButtons=(state.user.role==='accountant'||hasPermission('cashierView'))?'':`<button class="btn" onclick="go('reports')">تقارير الحجوزات</button><button class="btn primary" onclick="openNewBooking()">＋ حجز جديد</button>`;
+ const statusControl=(state.user.role==='accountant'||hasPermission('cashierView'))?'':`<select id="bookingStatus">${[['all','كل الحجوزات'],['مبدئي','حجز مبدئي'],['مؤكد','مؤكد'],['ملغي','ملغي'],['مرفوض','مرفوض'],['تمت المناسبة','تمت المناسبة']].map(([v,l])=>`<option value="${v}" ${status===v?'selected':''}>${l}</option>`).join('')}</select>`;
+ const exportControl=hasPermission('reports')&&!hasPermission('cashierView')?`<a class="btn" href="#" onclick="downloadReport('bookings');return false">تصدير Excel / CSV</a>`:'';
+ $('#mainContent').innerHTML=pageHead('الحجوزات','المواعيد والتعاقدات والمدفوعات',headButtons)+
+ `<section class="panel"><div class="toolbar"><input id="bookingSearch" placeholder="ابحث باسم العميل أو العريس أو العروسة أو الموبايل" value="${escapeHtml(q)}">${statusControl}<button class="btn primary" id="bookingSearchBtn">بحث</button>${exportControl}</div>${table(['العميل','المكان / القاعة','التاريخ والفترة','الأفراد','قيمة العقد','المدفوع','المتبقي','الحالة','الحساب'],rows)}</section>`;
+ $('#bookingSearchBtn').onclick=renderBookings;$('#bookingSearch').onkeydown=e=>{if(e.key==='Enter')renderBookings()};if($('#bookingStatus'))$('#bookingStatus').onchange=renderBookings;
+}
+async function newBooking(customerId=null){
+ let customers,halls,packages,paragraphs,menuGroups,contractors;
+ try{
+  [customers,halls,packages,paragraphs,menuGroups,contractors]=await Promise.all([api('/customers'),getHalls(),api('/packages'),api('/paragraphs'),api('/menu-groups'),api('/contractors')]);
+ }catch(err){
+  toast('تعذر فتح نموذج الحجز: '+(err?.message||'تعذر تحميل البيانات')+' — راجع صلاحيات المستخدم واتصال الخادم.',true);
+  console.error('newBooking initialization failed:',err);
+  return;
+ }
+ // A new booking can also start when no customer exists yet.
+ customers=Array.isArray(customers)?customers:[];
+ halls=Array.isArray(halls)?halls:[];
+ packages=Array.isArray(packages)?packages:[];
+ paragraphs=Array.isArray(paragraphs)?paragraphs:[];
+ menuGroups=Array.isArray(menuGroups)?menuGroups:[];
+ contractors=Array.isArray(contractors)?contractors:[];
+ if(!halls.some(h=>h.active)){toast('أضف قاعة فعالة أولًا قبل إنشاء الحجز.',true);return go('halls')}
+ const paraOptions=paragraphs.filter(p=>p.active);
+ const menuOptions=menuGroups.filter(g=>g.active);
+ const paraHtml=paraOptions.length?paraOptions.map(p=>`<label class="optional-choice"><input type="checkbox" name="paragraph_ids" value="${p.id}" data-price="${p.price}"><span><strong>${escapeHtml(p.name)}</strong><small>إضافة اختيارية</small></span><b>${money(p.price)}</b></label>`).join(''):'<p class="muted">لم تتم إضافة عناصر بعد. يمكنك إضافتها من قسم الإضافات.</p>';
+ const menuHtml=menuOptions.length?menuOptions.map(g=>`<label class="optional-choice"><input type="checkbox" name="menu_group_ids" value="${g.id}" data-price="${g.price}" data-price-mode="${g.price_mode||'per_person'}"><span><strong>${escapeHtml(g.name)}</strong><small>${(g.items||[]).map(i=>escapeHtml(i.name)).join('، ')||'لا توجد أصناف'} · ${g.price_mode==='fixed'?'سعر ثابت للمجموعة':'سعر للفرد'}</small></span><b>${money(g.price)}${g.price_mode==='fixed'?'':' / فرد'}</b></label>`).join(''):'<p class="muted">لا توجد مجموعات منيو مضافة حاليًا. ده قسم اختياري مستقل عن الباكدجات، ولن يؤثر على ظهور الباكدج أو سعره.</p>';
+ const contractorHtml=contractors.length?contractors.map(c=>`<label class="optional-choice"><input type="checkbox" name="booking_contractor_ids" value="${c.id}" data-price="${Number(c.default_price||0)}" data-name="${escapeHtml(c.name)}" data-service="${escapeHtml(c.service_type||c.name)}"><span><strong>${escapeHtml(c.name)}</strong><small>${escapeHtml(c.service_type||'خدمة متعهد')}</small></span><b>${money(c.default_price||0)}</b><input class="contractor-booking-price" aria-label="سعر المتعهد" type="number" min="0" step="0.01" value="${Number(c.default_price||0)}" data-contractor-price="${c.id}" style="max-width:130px"></label>`).join(''):'<p class="muted">لا يوجد متعهدون مسجلون. أضف المتعهد أولًا من قسم المتعهدين والحسابات.</p>';
+ const selectedCustomer=customers.find(c=>Number(c.id)===Number(customerId));
+ const customerSelect=field('العميل المسجل','customer_id','select',customerId||'',{options:[{value:'',label:'ابحث برقم الموبايل أو اختر عميلًا'},...customers.map(c=>({value:c.id,label:c.name+' · '+c.phone}))]});
+ const customerLookup=field('رقم موبايل العميل','lookup_phone','tel',selectedCustomer?.phone||'',{required:true,placeholder:'اكتب رقم الموبايل كاملًا',autocomplete:'tel',inputmode:'tel'})+
+ `<div class="field full-width"><div id="customerLookupResult" class="notice">${selectedCustomer?`تم العثور على العميل: <strong>${escapeHtml(selectedCustomer.name)}</strong>`:'اكتب رقم الموبايل لعرض بيانات العميل المسجل أو تسجيل عميل جديد.'}</div></div>`+
+ `<div id="newCustomerInlineFields" class="field-grid full-width" style="display:none;border:1px dashed var(--border,#cbd5e1);padding:14px;border-radius:12px"><div class="field full-width"><strong>تسجيل عميل جديد</strong><p class="muted">الرقم غير مسجل. أكمل بيانات العميل وسيتم حفظه تلقائيًا مع الحجز.</p></div>`+
+ field('اسم العميل','new_customer_name','text','',{required:false})+field('اسم العريس','new_customer_groom','text','')+field('اسم العروسة','new_customer_bride','text','')+`</div>`;
+ const fields=customerLookup+
+ customerSelect+
+ field('نوع الفرح','event_period','select','نهاري',{required:true,options:[{value:'نهاري',label:'فرح نهاري'},{value:'مسائي',label:'فرح ليلي'}]})+
+ field('القاعة','hall_id','select','',{required:true,options:[{value:'',label:'اختار القاعة أولًا'},...halls.filter(h=>h.active).map(h=>({value:h.id,label:h.name}))]})+
+ field('الباكدج (اختياري)','package_id','select','',{options:[{value:'',label:'اختار القاعة أولًا'}]})+
+ `<div class="field full-width"><div id="packageCompositionPreview" class="notice" style="display:none"><strong>مكونات الباكدج</strong><ul style="margin:8px 0 0;padding-right:22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px"><li>إيجار القاعة (مكيفة أو Open Area)</li><li>دانس فلور</li><li>كوشة للعروسين</li><li>ليزر موفنج بيم</li><li>DJ</li><li>تصوير فيديو HD</li><li>ترابيزات استيل وكراسي استيل جولد</li><li>سنتر بيس</li><li>ديكور مدخل</li><li>زينة مدخل</li><li>شاشات عرض</li><li>تصوير فيديو جميع القاعات بكاميرا مونو HD</li></ul><div id="packageCustomDescription" style="margin-top:8px"></div></div></div>`+
+ field('تاريخ المناسبة','event_date','date','',{required:true})+
+ field('عدد الأفراد','guest_count','number','',{min:0})+field('نوع المناسبة','event_type','text','حفل زفاف')+
+ field('سعر الحجز الأساسي','contract_total','number','',{required:true,min:0,step:'0.01'})+
+ `<div class="field full-width"><div class="notice" id="hallPricePreview">اختار القاعة واكتب عدد الأفراد علشان يظهر سعر القاعة المناسب.</div></div>`+
+ field('نوع الخصم','discount_mode','select','percent',{options:[{value:'percent',label:'نسبة مئوية %'},{value:'amount',label:'مبلغ بالجنيه'}]})+
+ field('قيمة الخصم','discount_value','number','0',{min:0,step:'0.01'})+
+ `<div class="field full-width"><div id="discountApprovalHint" class="notice">حد الخصم المسموح لك يظهر هنا تلقائيًا. أي خصم يتجاوز صلاحيتك يحتاج طلبًا وموافقة المدير العام.</div></div>`+
+ `<div id="discountReasonWrap" class="field full-width" style="display:none">${field('سبب طلب الخصم للمدير العام','discount_request_reason','textarea','',{full:true})}</div>`+
+ field('الحالة','status','select','مبدئي',{options:[{value:'مبدئي',label:'مبدئي'},{value:'مؤكد',label:'مؤكد'}]})+field('ملاحظات','notes','textarea','',{full:true});
+ const optional=`<div class="booking-selectors">
+ <details class="optional-section booking-multi-select" id="additionsDropdown"><summary><span><strong>الإضافات</strong> <em class="optional-tag">اختياري</em></span><small id="additionsSelectedCount">لم يتم اختيار إضافات</small><span class="dropdown-chevron">⌄</span></summary><p class="dropdown-help">اختار إضافة أو أكثر؛ سعر كل إضافة يضاف تلقائيًا لإجمالي الحجز.</p><div class="optional-list">${paraHtml}</div></details>
+ <details class="optional-section booking-multi-select" id="menuDropdown"><summary><span><strong>مجموعات المنيو</strong> <em class="optional-tag">اختياري</em></span><small id="menuSelectedCount">لم يتم اختيار منيو</small><span class="dropdown-chevron">⌄</span></summary><p class="dropdown-help">اختار مجموعة أو أكثر؛ كل مجموعة بسعرها ومكوناتها.</p><div class="optional-list">${menuHtml}</div></details>
+ <details class="optional-section booking-multi-select" id="contractorsDropdown"><summary><span><strong>المتعهدون والخدمات</strong> <em class="optional-tag">اختياري</em></span><small id="contractorsSelectedCount">لم يتم اختيار متعهدين</small><span class="dropdown-chevron">⌄</span></summary><p class="dropdown-help">اختار متعهدًا أو أكثر، ويمكن تعديل سعر الخدمة قبل حفظ الحجز.</p><div class="optional-list">${contractorHtml}</div></details>
+ </div><div class="booking-total-preview"><span>إجمالي الإضافات + المنيو + المتعهدين</span><strong id="extrasPreview">${money(0)}</strong><small>يشمل سعر الإضافات والمنيو حسب عدد الأفراد وأسعار المتعهدين المحددين.</small></div>`;
+ formModal('إنشاء حجز جديد',fields+`<div class="field-grid" style="margin-top:18px"><div class="field full-width">${optional}</div></div>`,'حفظ الحجز',async d=>{
+   d.paragraph_ids=$$('input[name="paragraph_ids"]:checked').map(x=>Number(x.value));
+   d.menu_group_ids=$$('input[name="menu_group_ids"]:checked').map(x=>Number(x.value));
+   d.contractor_services=$$('input[name="booking_contractor_ids"]:checked').map(x=>({contr
