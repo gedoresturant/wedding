@@ -1,0 +1,51 @@
+name: Verify Wedding ERP endpoints
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify hosted ERP page
+        run: curl --fail --silent --show-error https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-web -o /tmp/erp.html && grep -q 'id="loginForm"' /tmp/erp.html
+      - name: Verify database-backed API health
+        run: curl --fail --silent --show-error https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-api/health | grep -q '"database":true'
+      - name: Verify admin authentication and read routes
+        env:
+          API: https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-api
+          WEB: https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-web
+        run: |
+          set -euo pipefail
+          html=$(curl --fail --silent --show-error "$WEB")
+          password=$(printf '%s' "$html" | grep -oP 'name="password" type="password" value="\K[^"]+' | head -n1)
+          test -n "$password"
+          body=$(jq -n --arg password "$password" '{companySlug:"wedding-halls",username:"admin",password:$password}')
+          login=$(curl --silent --show-error --fail-with-body -H 'Content-Type: application/json' -d "$body" "$API/auth/login")
+          token=$(printf '%s' "$login" | jq -r '.token')
+          test -n "$token" && test "$token" != "null"
+          echo "Admin login succeeded"
+          for path in /auth/me /dashboard /halls /customers /bookings /packages /paragraphs /menu-groups /menu-items /followups /payments /expenses /contractors /contractor-payments /costs /cash-transactions /discount-requests /notifications /logs /admin/users /admin/company /calendar /cashbox /reports/summary; do
+            code=$(curl --silent --output /tmp/erp-response.json --write-out '%{http_code}' -H "Authorization: Bearer $token" "$API$path")
+            echo "$code $path"
+            if [ "$code" != "200" ]; then cat /tmp/erp-response.json; exit 1; fi
+          done
+          booking=$(curl --silent --show-error --fail -H "Authorization: Bearer $token" "$API/bookings" | jq -r '.[0].id // empty')
+          if [ -n "$booking" ]; then
+            for path in "/bookings/$booking" "/bookings/$booking/insurance" "/bookings/$booking/contractors"; do
+              code=$(curl --silent --output /tmp/erp-response.json --write-out '%{http_code}' -H "Authorization: Bearer $token" "$API$path")
+              echo "$code $path"
+              if [ "$code" != "200" ]; then cat /tmp/erp-response.json; exit 1; fi
+            done
+          fi
+          invitation=$(curl --silent --show-error --fail-with-body -H "Authorization: Bearer $token" "$API/bookings/$booking/invitation")
+          echo "$invitation" | jq -e '.qr_data_url | startswith("data:image/png;base64,")' >/dev/null
+          scan=$(printf '%s' "$invitation" | jq -r '.scan_url')
+          scan_code=$(curl --silent --output /tmp/entry.html --write-out '%{http_code}' "$scan")
+          echo "$scan_code guest invitation page"
+          test "$scan_code" = "200"
+          grep -q 'التحقق من دعوة الفرح' /tmp/entry.html

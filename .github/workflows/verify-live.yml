@@ -1,0 +1,22 @@
+name: Verify Published Wedding ERP
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check online loader syntax
+        run: node --check online/app.js
+      - name: Check published login page
+        run: curl --fail --silent --show-error https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-web | grep -q 'id="loginForm"'
+      - name: Check GitHub source CORS
+        run: curl --silent --show-error --head https://raw.githubusercontent.com/gedoresturant/wedding/feat/github-pages-supabase-only/public/app.js | grep -i 'access-control-allow-origin'
+      - name: Check Supabase database API
+        run: curl --fail --silent --show-error https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-api/health | grep -q '"database":true'
