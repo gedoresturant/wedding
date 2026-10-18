@@ -42,3 +42,10 @@ jobs:
               if [ "$code" != "200" ]; then cat /tmp/erp-response.json; exit 1; fi
             done
           fi
+          invitation=$(curl --silent --show-error --fail-with-body -H "Authorization: Bearer $token" "$API/bookings/$booking/invitation")
+          echo "$invitation" | jq -e '.qr_data_url | startswith("data:image/png;base64,")' >/dev/null
+          scan=$(printf '%s' "$invitation" | jq -r '.scan_url')
+          scan_code=$(curl --silent --output /tmp/entry.html --write-out '%{http_code}' "$scan")
+          echo "$scan_code guest invitation page"
+          test "$scan_code" = "200"
+          grep -q 'التحقق من دعوة الفرح' /tmp/entry.html
