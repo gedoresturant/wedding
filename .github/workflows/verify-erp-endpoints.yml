@@ -1,0 +1,14 @@
+name: Verify Wedding ERP endpoints
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify hosted ERP page
+        run: curl --fail --silent --show-error https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-web | grep -q 'id="loginForm"'
+      - name: Verify database-backed API health
+        run: curl --fail --silent --show-error https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-api/health | grep -q '"database":true'
