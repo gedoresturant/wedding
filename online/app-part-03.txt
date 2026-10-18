@@ -1,0 +1,148 @@
+actor_id:Number(x.value),price:Number($(`[data-contractor-price="${x.value}"]`)?.value||x.dataset.price||0),service_name:x.dataset.service||x.dataset.name||'خدمة متعهد'}));
+   if(!d.customer_id){
+     const phone=String(d.lookup_phone||'').trim(),name=String(d.new_customer_name||'').trim();
+     if(!phone||!name)throw new Error('رقم الموبايل غير مسجل. اكتب اسم العميل لاستكمال تسجيله قبل الحجز.');
+     const created=await api('/customers',{method:'POST',body:{name,phone,groom_name:d.new_customer_groom||'',bride_name:d.new_customer_bride||'',event_type:d.event_type||'حفل زفاف',venue:'',hall_id:d.hall_id||null,event_date:d.event_date||'',event_period:d.event_period||'',source:'حجز جديد',status:'initial',notes:d.notes||''}});
+     d.customer_id=created.id;
+   }
+   delete d.lookup_phone;delete d.new_customer_name;delete d.new_customer_groom;delete d.new_customer_bride;
+   const inviteWindow=d.status==='مؤكد'?window.open('about:blank','_blank'):null;
+   const r=await api('/bookings',{method:'POST',body:d});toast(r.discount_pending?'تم حفظ الحجز مبدئيًا وإرسال طلب الخصم للمدير العام. ستظهر نتيجة القرار في الإشعارات.':'تم إنشاء الحجز رقم '+r.id+' مع الإضافات الاختيارية');
+   if(r.discount_pending&&inviteWindow)inviteWindow.close();
+   if(d.status==='مؤكد'&&!r.discount_pending) await showInvitationCard(r.id,inviteWindow);
+ });
+ const bookingSubmitButton=$('#dataForm button[type="submit"]');
+ const sendDiscountRequestButton=document.createElement('button');
+ sendDiscountRequestButton.type='button';sendDiscountRequestButton.className='btn warning';sendDiscountRequestButton.textContent='إرسال طلب للمدير العام';sendDiscountRequestButton.style.display='none';
+ bookingSubmitButton?.parentElement?.insertBefore(sendDiscountRequestButton,bookingSubmitButton);
+ sendDiscountRequestButton.addEventListener('click',()=>$('#dataForm')?.requestSubmit());
+ const phoneLookup=$('#dataForm [name="lookup_phone"]'),customerSelectEl=$('#dataForm [name="customer_id"]'),lookupResult=$('#customerLookupResult'),newCustomerFields=$('#newCustomerInlineFields');
+ const normalizePhone=value=>String(value||'').replace(/\\D/g,'').replace(/^0020/,'0').replace(/^20(?=1[0125])/,'0');
+ const showCustomerDetails=c=>{
+   if(!lookupResult)return;
+   if(c){
+     customerSelectEl.value=String(c.id);
+     if(newCustomerFields)newCustomerFields.style.display='none';
+     lookupResult.className='notice';
+     lookupResult.innerHTML=`<strong>تم العثور على العميل المسجل ✓</strong><br>الاسم: ${escapeHtml(c.name)}<br>الموبايل: ${escapeHtml(c.phone)}<br>العريس: ${escapeHtml(c.groom_name||'—')} · العروسة: ${escapeHtml(c.bride_name||'—')}<br>نوع المناسبة: ${escapeHtml(c.event_type||'—')} · تاريخ المناسبة السابق: ${escapeHtml(c.event_date||'—')}<br>القاعة السابقة: ${escapeHtml(c.hall_name||c.venue||'—')}<br>ملاحظات: ${escapeHtml(c.notes||'—')}`;
+   }else{
+     customerSelectEl.value='';
+     if(newCustomerFields)newCustomerFields.style.display='grid';
+     lookupResult.className='notice discount-approval-required';
+     lookupResult.innerHTML='<strong>الرقم غير مسجل لدينا.</strong><br>أكمل اسم العميل وبياناته في قسم «تسجيل عميل جديد» أدناه، وسيتم إنشاء ملف العميل تلقائيًا مع الحجز.';
+   }
+ };
+ phoneLookup?.addEventListener('input',()=>{
+   const phone=normalizePhone(phoneLookup.value);
+   if(phone.length<8){
+     customerSelectEl.value='';
+     if(newCustomerFields)newCustomerFields.style.display='none';
+     if(lookupResult){lookupResult.className='notice';lookupResult.textContent='اكتب رقم الموبايل لعرض بيانات العميل المسجل أو تسجيل عميل جديد.'}
+     return;
+   }
+   const match=customers.find(c=>normalizePhone(c.phone)===phone);
+   showCustomerDetails(match||null);
+ });
+ customerSelectEl?.addEventListener('change',()=>{
+   const c=customers.find(x=>String(x.id)===customerSelectEl.value);
+   if(c){phoneLookup.value=c.phone||'';showCustomerDetails(c)}
+ });
+ if(selectedCustomer)showCustomerDetails(selectedCustomer);
+ const packageSelect=$('#dataForm [name="package_id"]'),hallSelect=$('#dataForm [name="hall_id"]'),basePriceInput=$('#dataForm [name="contract_total"]'),guestInput=$('#dataForm [name="guest_count"]'),pricePreview=$('#hallPricePreview');
+ const packageCompositionPreview=$('#packageCompositionPreview'),packageCustomDescription=$('#packageCustomDescription');
+ const updatePackagesForHall=(selectedId='')=>{
+   if(!packageSelect)return;
+   const hallId=Number(hallSelect?.value||0);
+   const period=$('#dataForm [name="event_period"]')?.value||'نهاري';
+   const hallPackages=packages.filter(p=>p.active&&(p.event_period||'مسائي')===period&&hallId&&(!p.hall_id||Number(p.hall_id)===hallId));
+   packageSelect.innerHTML=`<option value="">${hallId?(hallPackages.length?'اختار باكدج القاعة':'لا توجد باكدجات مسجلة لهذه القاعة'):'اختار القاعة أولًا'}</option>`+
+     hallPackages.map(p=>`<option value="${p.id}">${escapeHtml(p.name)} · ${escapeHtml(money(p.price))}</option>`).join('');
+   packageSelect.value=hallPackages.some(p=>String(p.id)===String(selectedId))?String(selectedId):'';
+   if(!packageSelect.value)renderPackageComposition(null);
+ };
+ const renderPackageComposition=(pkg)=>{
+   if(!packageCompositionPreview)return;
+   if(!pkg){packageCompositionPreview.style.display='none';if(packageCustomDescription)packageCustomDescription.textContent='';return;}
+   packageCompositionPreview.style.display='block';
+   if(packageCustomDescription){
+     const description=String(pkg.description||'').trim();
+     const included=Number(pkg.included_guest_count||0)>0?`<div><strong>الأفراد المشمولون:</strong> ${Number(pkg.included_guest_count)} فرد</div><div><strong>الفرد الإضافي:</strong> ${money(pkg.extra_guest_price)} جنيه</div><div><strong>المشروبات/العناصر:</strong> ${escapeHtml(pkg.included_items||'—')}</div>`:'';packageCustomDescription.innerHTML=included+(description?`<div><strong>تفاصيل إضافية للباكدج:</strong> ${escapeHtml(description)}</div>`:'');
+   }
+ };
+ const applyHallTier=()=>{
+   const hallId=Number(hallSelect?.value||0),guests=Number(guestInput?.value||0);
+   if(!hallId||!guests){if(pricePreview)pricePreview.textContent='اختار القاعة واكتب عدد الأفراد علشان يظهر سعر القاعة المناسب.';return}
+   const period=$('#dataForm [name="event_period"]')?.value||'نهاري';
+   const tiers=packages.filter(p=>p.active&&(p.event_period||'مسائي')===period&&(!p.hall_id||Number(p.hall_id)===hallId)&&(Number(p.included_guest_count)>0||Number(p.guest_count)>0)&&((Number(p.included_guest_count)>0)||Number(p.guest_count)>=guests)).sort((a,b)=>Number(a.guest_count)-Number(b.guest_count));
+   const tier=tiers[0];
+   if(!tier){
+     if(packageSelect)packageSelect.value='';
+     renderPackageComposition(null);
+     if(basePriceInput)basePriceInput.value='';
+     if(pricePreview)pricePreview.textContent='لا توجد شريحة سعر مسجلة لهذه القاعة تغطي '+guests+' فرد. أضف شريحة أكبر من قسم شرائح أسعار القاعات أو أدخل السعر يدويًا.';
+     return;
+   }
+   if(packageSelect)packageSelect.value=String(tier.id);
+   if(basePriceInput)basePriceInput.value=Number(tier.price||0);
+   renderPackageComposition(tier);
+   const included=Number(tier.included_guest_count||0),extra=Math.max(0,guests-included)*Number(tier.extra_guest_price||0);if(pricePreview)pricePreview.innerHTML=`السعر التلقائي: <strong>${escapeHtml(tier.name)}</strong> — ${included?`أول ${included} فرد مشمولون، والزيادة ${money(tier.extra_guest_price)} للفرد · إجمالي الزيادة ${money(extra)} · `:`حتى ${Number(tier.guest_count)} فرد — `}<strong>${money(Number(tier.price)+extra)}</strong>`;
+ };
+ const periodSelect=$('#dataForm [name="event_period"]');
+ const refreshPeriodOptions=()=>{
+  const period=periodSelect?.value||'نهاري';
+  const filteredExtras=paraOptions.filter(x=>(x.event_period||'مسائي')===period);
+  const filteredMenus=menuOptions.filter(x=>(x.event_period||'مسائي')===period);
+  const extrasContainer=$$('.optional-section')[0]?.querySelector('.optional-list');
+  const menusContainer=$$('.optional-section')[1]?.querySelector('.optional-list');
+  if(extrasContainer)extrasContainer.innerHTML=filteredExtras.length?filteredExtras.map(p=>`<label class="optional-choice"><input type="checkbox" name="paragraph_ids" value="${p.id}" data-price="${p.price}"><span><strong>${escapeHtml(p.name)}</strong><small>إضافة ${period==='نهاري'?'نهارية':'ليلية'}</small></span><b>${money(p.price)}</b></label>`).join(''):'<p class="muted">لا توجد إضافات لهذا النوع من الفرح.</p>';
+  if(menusContainer)menusContainer.innerHTML=filteredMenus.length?filteredMenus.map(g=>`<label class="optional-choice"><input type="checkbox" name="menu_group_ids" value="${g.id}" data-price="${g.price}" data-price-mode="${g.price_mode||'per_person'}"><span><strong>${escapeHtml(g.name)}</strong><small>${(g.items||[]).map(i=>escapeHtml(i.name)).join('، ')||'لا توجد أصناف'} · ${g.price_mode==='fixed'?'سعر ثابت للمجموعة':'سعر للفرد'}</small></span><b>${money(g.price)}${g.price_mode==='fixed'?'':' / فرد'}</b></label>`).join(''):'<p class="muted">لا توجد مجموعات منيو لهذا النوع من الفرح.</p>';
+  updatePackagesForHall();applyHallTier();updateExtras();
+ };
+ if(periodSelect)periodSelect.addEventListener('change',refreshPeriodOptions);
+ if(hallSelect)hallSelect.addEventListener('change',()=>{updatePackagesForHall();if(basePriceInput)basePriceInput.value='';applyHallTier()});
+ if(guestInput)guestInput.addEventListener('input',applyHallTier);
+ if(packageSelect)packageSelect.addEventListener('change',()=>{
+   const p=packages.find(x=>String(x.id)===packageSelect.value);
+   if(!p)renderPackageComposition(null);
+   if(p){
+     if(!hallSelect?.value||(p.hall_id&&Number(p.hall_id)!==Number(hallSelect.value))){toast('اختار القاعة أولًا وحدد باكدج تابع لنفس القاعة.',true);updatePackagesForHall();return}
+     renderPackageComposition(p);
+     if(basePriceInput)basePriceInput.value=p.price;
+     if(guestInput&&Number(p.guest_count)>0&&!Number(guestInput.value))guestInput.value=p.guest_count;
+     if(pricePreview)pricePreview.textContent=`السعر المختار: ${p.name} — ${Number(p.included_guest_count||0)?`أول ${p.included_guest_count} فرد مشمولون؛ الزيادة ${money(p.extra_guest_price)} للفرد — `:(p.guest_count?`حتى ${p.guest_count} فرد — `:'')}${money(Number(p.price)+Math.max(0,Number(guestInput?.value||0)-Number(p.included_guest_count||0))*Number(p.extra_guest_price||0))}`;
+   }
+ });
+ const updateExtras=()=>{const guests=Number($('#dataForm [name="guest_count"]')?.value||0);const selectedAdditions=$$('input[name="paragraph_ids"]:checked'),selectedMenus=$$('input[name="menu_group_ids"]:checked'),selectedContractors=$$('input[name="booking_contractor_ids"]:checked');const paragraphsTotal=selectedAdditions.reduce((s,x)=>s+(Number(x.dataset.price)||0),0);const menuTotal=selectedMenus.reduce((s,x)=>s+(Number(x.dataset.price)||0)*(x.dataset.priceMode==='fixed'?1:guests),0);const contractorTotal=selectedContractors.reduce((s,x)=>s+Number($(`[data-contractor-price="${x.value}"]`)?.value||x.dataset.price||0),0);const node=$('#extrasPreview');if(node)node.textContent=money(paragraphsTotal+menuTotal+contractorTotal);const count=(id,n,one,many)=>{const el=$(id);if(el)el.textContent=n?`${n} ${n===1?one:many}`:'لم يتم الاختيار'};count('#additionsSelectedCount',selectedAdditions.length,'إضافة مختارة','إضافات مختارة');count('#menuSelectedCount',selectedMenus.length,'مجموعة منيو مختارة','مجموعات منيو مختارة');count('#contractorsSelectedCount',selectedContractors.length,'متعهد مختار','متعهدين مختارين')};
+ $$('#dataForm input[name="paragraph_ids"], #dataForm input[name="menu_group_ids"]').forEach(x=>x.addEventListener('change',updateExtras));
+ $$('input[name="booking_contractor_ids"]').forEach(x=>x.addEventListener('change',updateExtras));$$('.contractor-booking-price').forEach(x=>x.addEventListener('input',updateExtras));
+ const guestsField=$('#dataForm [name="guest_count"]');if(guestsField)guestsField.addEventListener('input',updateExtras);
+ updateExtras();
+ // Apply event-period filtering immediately when the booking form opens, not only after the user changes the selector.
+ refreshPeriodOptions();
+ const discountField=$('#dataForm [name="discount_value"]'),discountModeField=$('#dataForm [name="discount_mode"]');
+ const updateDiscountHint=()=>{
+   if(!discountField||!discountModeField)return;
+   const base=Number(basePriceInput?.value||0),value=Math.max(0,Number(discountField.value||0)),mode=discountModeField.value;
+   const limitType=state.user.discount_limit_type==='amount'?'amount':'percent',limitValue=Math.max(0,Number(state.user.discount_limit_value??(state.user.role==='manager'?30:state.user.role==='reception'?20:100)));
+   const allowed=limitType==='amount'?Math.min(base,limitValue):base*Math.min(limitValue,100)/100;
+   const requested=mode==='percent'?base*value/100:value,exceeds=requested>allowed+0.001,hint=$('#discountApprovalHint');
+   const reasonWrap=$('#discountReasonWrap'),reasonField=$('#dataForm [name="discount_request_reason"]');
+   if(reasonWrap)reasonWrap.style.display=exceeds?'block':'none';
+   if(reasonField)reasonField.required=exceeds;
+   if(sendDiscountRequestButton)sendDiscountRequestButton.style.display=exceeds?'inline-flex':'none';
+   if(bookingSubmitButton)bookingSubmitButton.textContent=exceeds?'إرسال الطلب وحفظ الحجز مبدئيًا':'حفظ الحجز';
+   if(hint){
+     hint.className=exceeds?'notice discount-approval-required':'notice';
+     hint.innerHTML=exceeds
+       ?`<strong>⚠️ يجب الحصول على موافقة المدير العام</strong><br>الخصم المطلوب: ${mode==='percent'?value+'%':''} (${money(requested)}). صلاحيتك الحالية: ${limitType==='percent'?limitValue+'%':money(limitValue)} (${money(allowed)}). عند حفظ الحجز سيتم إرسال طلب تلقائيًا بكل تفاصيل الحجز، وسيظل الحجز مبدئيًا لحين القرار.`
+       :`<strong>حد الخصم المسموح لك:</strong> ${limitType==='percent'?limitValue+'%':money(limitValue)} من سعر الباكدج الأساسي (حد أقصى ${money(allowed)}). الخصم المطلوب حاليًا: ${mode==='percent'?value+'%':''} (${money(requested)}).`;
+   }
+ };
+ if(discountField)discountField.addEventListener('input',updateDiscountHint);if(discountModeField)discountModeField.addEventListener('change',updateDiscountHint);if(basePriceInput)basePriceInput.addEventListener('input',updateDiscountHint);if(packageSelect)packageSelect.addEventListener('change',updateDiscountHint);updateDiscountHint();
+}
+async function openBooking(id){
+ const b=await api('/bookings/'+id);
+ const cashierMode=hasPermission('cashierView')&&state.user.role!=='admin';
+ if(cashierMode){
+  const additions=(b.paragraphs||[]).map(p=>`<tr><td>${escapeHtml(p.name_snapshot)}</td><td>${Number(p.duration_snapshot||0)} دقيقة</td><td>${escapeHtml(p.show_names_snapshot||'—')}</td><td>${money(p.price_snapshot)}</td></tr>`).join('');
+  const menus=(b.menu_groups||[]).map(g=>`<tr><td>${escapeHtml(g.name_snapshot)}</td><td>${(g.items||[]).map(i=>escapeHtml(i.name)+' ('+escapeHtml(i.category)+')'+(i.quantity?' × '+escapeHtml(i.quantity):'')).join('، ')||'—'}</td><td>${g.price_mode_snapshot==='per_person'?money(g.unit_price_snapshot)+' × '+(g.guest_count_snapshot||b.guest_count)+' فرد':'سعر ثابت للمجموعة'}</

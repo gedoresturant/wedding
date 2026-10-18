@@ -1,0 +1,88 @@
+nBooking(${b.id})">فتح الحساب / تحصيل</button></td></tr>`).join('');
+   $('#mainContent').innerHTML=pageHead('شاشة الحسابات والتحصيل','ابحث عن العميل، راجع بيانات الحجز وسجّل المبلغ المستلم',`<button class="btn" onclick="renderFinance()">تحديث القائمة</button>`)+
+   `<section class="panel"><div class="toolbar"><input id="accountSearch" placeholder="ابحث باسم العميل أو العريس أو العروسة أو الموبايل" value="${escapeHtml(q)}"><button class="btn primary" id="accountSearchBtn">بحث</button></div>${table(['العميل وأصحاب المناسبة','القاعة','موعد الفرح','إجمالي المستحق','المدفوع سابقًا','المتبقي','إجراء'],rows,'لا توجد حجوزات مؤكدة مطابقة للبحث')}</section>`;
+   $('#accountSearchBtn').onclick=renderFinance;$('#accountSearch').onkeydown=e=>{if(e.key==='Enter')renderFinance()};return;
+ }
+ const expenses=await api('/expenses');const income=bookings.reduce((s,b)=>s+Number(b.paid_total),0),expense=expenses.reduce((s,e)=>s+Number(e.amount),0);
+ $('#mainContent').innerHTML=pageHead('الخزنة والتحصيل','متابعة المقبوضات والمصروفات',`<button class="btn primary" onclick="newExpense()">＋ تسجيل مصروف</button>`)+`<div class="grid metrics">${metric('إجمالي التحصيل المسجل',money(income),'من الحجوزات','#15945c')}${metric('المصروفات المسجلة',money(expense),'كل المصروفات','#e8485e')}${metric('صافي الحركة التقريبي',money(income-expense),'تحصيلات ناقص المصروفات')}</div>`+panel('الحجوزات والمبالغ المتبقية',table(['العميل','القاعة','تاريخ المناسبة','العقد','المدفوع','المتبقي','إجراء'],bookings.filter(b=>b.remaining>0).map(b=>`<tr><td>${escapeHtml(b.customer_name)}</td><td>${escapeHtml(b.hall_name)}</td><td>${dateFmt(b.event_date)}</td><td>${money(b.total_due??((b.contract_total-b.discount)*1.15))}</td><td>${money(b.paid_total)}</td><td><strong>${money(b.remaining)}</strong></td><td><button class="btn primary" onclick="openBooking(${b.id})">تحصيل</button></td></tr>`).join('')))+panel('آخر المصروفات',table(['التاريخ','البند','التصنيف','المبلغ','ملاحظات'],expenses.map(e=>`<tr><td>${dateFmt(e.expense_date)}</td><td>${escapeHtml(e.title)}</td><td>${escapeHtml(e.category)}</td><td>${money(e.amount)}</td><td>${escapeHtml(e.notes||'—')}</td></tr>`).join('')))}
+
+function newExpense(){formModal('تسجيل مصروف',field('اسم المصروف','title','text','',{required:true})+field('المبلغ','amount','number','',{required:true,min:0.01,step:'0.01'})+field('التصنيف','category','select','عام',{options:['عام','تشغيل','صيانة','تسويق','رواتب','ضيافة','أخرى'].map(x=>({value:x,label:x}))})+field('التاريخ','expense_date','date',new Date().toISOString().slice(0,10),{required:true})+field('ملاحظات','notes','textarea','',{full:true}),'حفظ المصروف',async d=>{await api('/expenses',{method:'POST',body:d});toast('تم تسجيل المصروف')})}
+async function renderReports(){const today=new Date().toISOString().slice(0,10),first=today.slice(0,7)+'-01';const d=await api('/reports/summary?from='+first+'&to='+today);
+ $('#mainContent').innerHTML=pageHead('تقارير الإدارة','الإشغال والتحصيل والأداء، مع تصدير الحجوزات والتكاليف والخزنة والمتعهدين إلى Excel',`<a class="btn gold" href="#" onclick="downloadReport('bookings');return false">تصدير الحجوزات Excel</a><a class="btn" href="#" onclick="downloadReport('costs');return false">تصدير التكاليف</a><a class="btn" href="#" onclick="downloadReport('financial');return false">تصدير التقرير المالي</a><a class="btn" href="#" onclick="downloadReport('contractors');return false">تصدير المتعهدين</a><a class="btn" href="#" onclick="downloadReport('discounts');return false">تقرير الخصومات Excel</a><button class="btn" onclick="window.print()">طباعة / PDF</button>`)+`<section class="panel"><div class="field-grid">${field('من تاريخ','from','date',first)}${field('إلى تاريخ','to','date',today)}</div><div class="form-actions"><button class="btn primary" id="refreshReport">تحديث التقرير</button></div></section><div class="grid metrics">${metric('عدد الحجوزات',d.bookings.count,'خلال الفترة')}${metric('قيمة العقود',money(d.bookings.contracts),'بعد الخصومات')}${metric('التحصيل',money(d.bookings.collected),'المدفوعات المسجلة','#15945c')}${metric('المتبقي',money(d.bookings.remaining),'مبالغ قيد التحصيل','#e8485e')}</div><div class="grid two-col">${panel('أداء القاعات',table(['القاعة','الحجوزات','قيمة العقود','التحصيل'],d.byHall.map(h=>`<tr><td>${escapeHtml(h.hall_name)}</td><td>${h.bookings}</td><td>${money(h.contracts)}</td><td>${money(h.collected)}</td></tr>`).join('')))}${panel('مصادر العملاء',table(['المصدر','عدد العملاء'],d.bySource.map(s=>`<tr><td>${escapeHtml(s.source||'غير محدد')}</td><td>${s.count}</td></tr>`).join('')))}</div><div class="notice">صافي الحركة في الفترة لا يساوي بالضرورة صافي الربح المحاسبي؛ التقرير يخص التحصيلات والمصروفات المسجلة بالنظام.</div>`;
+ $('#refreshReport').onclick=async()=>{const from=$('[name=from]').value,to=$('[name=to]').value;const r=await api('/reports/summary?from='+from+'&to='+to);toast('تم تحديث التقرير');await renderReports()};
+}
+const USER_PERMISSION_OPTIONS=[
+ ['dashboard','لوحة التحكم'],['customers','العملاء والاستفسارات'],['followups','المتابعات'],['bookings','الحجوزات'],['cashierView','واجهة موظف التحصيل (تفاصيل الحجز والتحصيل فقط)'],['bookingDelete','حذف / أرشفة الحجوزات'],['calendar','تقويم الحجوزات'],
+ ['halls','القاعات'],['packages','الباكدجات والأسعار'],['paragraphs','الإضافات'],['menus','المنيو والوجبات'],['instructions','التعليمات'],['contracts','كتابة العقود'],['finance','الحسابات والتحصيلات'],
+ ['contractors','المتعهدون'],['costs','التكاليف'],['cashbox','الخزنة'],['discountRequests','طلبات الخصم والموافقات'],['reports','التقارير والتصدير'],
+ ['users','إدارة المستخدمين والصلاحيات'],['logs','سجل العمليات Logs'],['settings','إعدادات الشركة والنسخ الاحتياطي']
+];
+function hasPermission(key){return state.user?.role==='admin'||(Array.isArray(state.user?.permissions)&&state.user.permissions.includes(key))}
+function permissionFields(selected=[]){
+ return `<div class="field full-width"><label>صلاحيات المستخدم — اختار الأقسام التي يقدر يدخل عليها</label><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:10px">${USER_PERMISSION_OPTIONS.map(([key,label])=>`<label style="display:flex;gap:9px;align-items:center;border:1px solid var(--border,#d9e2ef);padding:10px;border-radius:10px;background:var(--surface,#fff)"><input type="checkbox" name="perm_${key}" ${selected.includes(key)?'checked':''} style="width:18px;height:18px;flex-shrink:0"><span>${label}</span></label>`).join('')}</div><small class="muted">المستخدم لا يرى الأقسام غير المحددة، والخادم يتحقق من صلاحية الوصول أيضًا.</small></div>`;
+}
+function readPermissionsFromForm(d){d.permissions=USER_PERMISSION_OPTIONS.map(([key])=>key).filter(key=>d['perm_'+key]==='on');if(d.permissions.includes('cashierView'))d.permissions=['bookings','cashierView'];for(const [key] of USER_PERMISSION_OPTIONS)delete d['perm_'+key];return d}
+async function renderUsers(){
+ const users=await api('/admin/users');
+ const rows=users.map(u=>{let p=[];try{p=JSON.parse(u.permissions_json||'[]')}catch(e){}return `<tr><td><strong>${escapeHtml(u.name)}</strong></td><td>${escapeHtml(u.username)}</td><td>${escapeHtml(u.job_title||'—')}</td><td><strong>${u.discount_limit_type==='amount'?money(u.discount_limit_value):Number(u.discount_limit_value||0)+'%'}</strong></td><td>${p.length} صلاحية</td><td>${u.active?'نشط':'متوقف'}</td><td>${dateFmt(String(u.created_at||'').slice(0,10))}</td><td><button class="btn primary" onclick="editUserDiscount(${u.id})">تعديل المستخدم والصلاحيات</button></td></tr>`}).join('');
+ $('#mainContent').innerHTML=pageHead('المستخدمون والصلاحيات','اكتب المسمى الوظيفي كما يناسب شركتك، ثم حدد بنفسك الأقسام التي يستطيع الموظف الوصول إليها وحد الخصم الخاص به.',`<button class="btn primary" onclick="newUser()">＋ مستخدم جديد</button>`)+panel('حسابات المستخدمين والصلاحيات المخصصة',table(['اسم الموظف','اسم المستخدم','المسمى الوظيفي','حد الخصم','الصلاحيات','الحالة','تاريخ الإنشاء','الإجراء'],rows));
+}
+function discountPermissionFields(type='percent',value='20'){
+ return field('نوع حد الخصم','discount_limit_type','select',type,{options:[{value:'percent',label:'نسبة مئوية من سعر الباكدج (%)'},{value:'amount',label:'مبلغ ثابت بالجنيه'}],required:true})+
+ field('الحد المسموح','discount_limit_value','number',String(value),{required:true,min:0,step:'0.01'})+
+ `<div class="field full-width"><div class="notice">إذا اختيرت النسبة، تُحسب من سعر الباكدج الأساسي. وإذا اختير مبلغ ثابت، فهو أقصى خصم بالجنيه. الخصم لا يتجاوز سعر الباكدج.</div></div>`;
+}
+function newUser(){
+ const selected=['dashboard'];
+ formModal('إضافة مستخدم',field('اسم الموظف','name','text','',{required:true})+field('اسم المستخدم','username','text','',{required:true})+field('كلمة المرور (10 أحرف على الأقل)','password','password','',{required:true})+field('المسمى الوظيفي — اكتب أي مسمى','job_title','text','',{required:true,placeholder:'مثال: مدير استقبال، محاسب تكاليف، مدير حسابات'})+permissionFields(selected)+discountPermissionFields('percent','0'),'إنشاء المستخدم',async raw=>{const d=readPermissionsFromForm(raw);await api('/admin/users',{method:'POST',body:d});toast('تم إنشاء المستخدم بالصلاحيات المحددة');await renderUsers()});
+}
+async function editUserDiscount(id){
+ const u=(await api('/admin/users')).find(x=>Number(x.id)===Number(id));if(!u)return;
+ let selected=[];try{selected=JSON.parse(u.permissions_json||'[]')}catch(e){}
+ formModal('تعديل المستخدم: '+u.name,field('اسم الموظف','name','text',u.name,{required:true})+field('اسم المستخدم','username','text',u.username,{required:true})+field('المسمى الوظيفي — اكتب أي مسمى','job_title','text',u.job_title||'',{required:true})+permissionFields(selected)+discountPermissionFields(u.discount_limit_type||'percent',u.discount_limit_value??0),'حفظ المستخدم والصلاحيات',async raw=>{const d=readPermissionsFromForm(raw);await api('/admin/users/'+id,{method:'PUT',body:d});toast('تم تحديث المسمى الوظيفي والصلاحيات وحد الخصم');await renderUsers()});
+}
+async function renderLogs(){const data=await api('/logs');$('#mainContent').innerHTML=pageHead('سجل العمليات','مراجعة من نفذ كل عملية ومتى',`<button class="btn" onclick="renderLogs()">تحديث</button>`)+panel('آخر 500 عملية',table(['التاريخ','المستخدم','العملية','الكيان','رقم السجل','التفاصيل'],data.map(l=>`<tr><td>${escapeHtml(l.created_at)}</td><td>${escapeHtml(l.user_name)}</td><td>${escapeHtml(l.action)}</td><td>${escapeHtml(l.entity)}</td><td>${l.entity_id}</td><td>${escapeHtml(l.details)}</td></tr>`).join('')))}
+
+function currentMonth(){return new Date().toISOString().slice(0,7)}
+function monthBounds(month){const [y,m]=month.split('-').map(Number);return {from:`${month}-01`,to:`${month}-${String(new Date(y,m,0).getDate()).padStart(2,'0')}`}}
+async function renderCalendar(){
+ const month=$('#calendarMonth')?.value||currentMonth(),bounds=monthBounds(month);
+ const bookings=await api('/calendar?'+new URLSearchParams(bounds));
+ const [year,mon]=month.split('-').map(Number),first=new Date(year,mon-1,1),last=new Date(year,mon,0),offset=(first.getDay()+1)%7;
+ const dayNames=['السبت','الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة'];
+ let cells='';
+ for(let i=0;i<offset;i++)cells+='<div class="calendar-cell empty"></div>';
+ for(let day=1;day<=last.getDate();day++){
+   const date=`${month}-${String(day).padStart(2,'0')}`,items=bookings.filter(b=>b.event_date===date);
+   const halls=new Set(items.map(b=>b.hall_id)).size;
+   const dayItems=items.map(b=>`${b.hall_name} · ${b.event_period}`).join('، ');
+   cells+=`<button class="calendar-cell ${items.length?'has-bookings':'free-day'}" onclick="openCalendarDay('${date}')"><span class="calendar-date">${day}</span><strong>${items.length?items.length+' حجز':'متاح'}</strong><small>${items.length?escapeHtml([...new Set(items.map(b=>b.event_period))].join(' / ')):'لا توجد حجوزات'}</small>${items.length?`<small>${halls} قاعة مشغولة</small>`:''}</button>`;
+ }
+ $('#mainContent').innerHTML=pageHead('تقويم الحجوزات','اعرف القاعات المشغولة والأيام المتاحة قبل تسجيل الحجز',`<button class="btn" onclick="renderCalendar()">تحديث</button>`)+
+ `<section class="panel"><div class="toolbar"><label>الشهر <input id="calendarMonth" type="month" value="${month}"></label><span class="muted">كل يوم يوضح عدد الحجوزات والفترات النهارية والمسائية</span></div><div class="calendar-grid">${dayNames.map(x=>`<div class="calendar-weekday">${x}</div>`).join('')}${cells}</div></section>
+ <section class="panel"><h3>ملخص الشهر</h3><div class="grid metrics">${metric('عدد الحجوزات',bookings.length,'خلال الشهر')}${metric('أيام بها حجوزات',new Set(bookings.map(b=>b.event_date)).size,'من أيام الشهر')}${metric('الأيام بدون حجوزات',last.getDate()-new Set(bookings.map(b=>b.event_date)).size,'قد تكون متاحة')}</div></section>`;
+ $('#calendarMonth').onchange=renderCalendar;
+}
+async function openCalendarDay(date){
+ const bookings=await api('/calendar?'+new URLSearchParams({from:date,to:date}));
+ const rows=bookings.map(b=>`<tr><td>${escapeHtml(b.hall_name)}</td><td>${escapeHtml(b.event_period)}</td><td>${escapeHtml(b.groom_name||'—')} / ${escapeHtml(b.bride_name||'—')}</td><td>${escapeHtml(b.customer_name)}</td><td>${escapeHtml(b.status)}</td><td><button class="btn" onclick="openBooking(${b.id})">تفاصيل</button></td></tr>`).join('');
+ modal('حجوزات يوم '+date,`<p>عدد الحجوزات: <strong>${bookings.length}</strong></p>${table(['القاعة','الفترة','العريس / العروسة','العميل','الحالة','فتح'],rows,'اليوم متاح ولا توجد حجوزات مسجلة')}`);
+}
+async function toggleMiniCalendar(){
+ const panel=$('#miniCalendarPanel');if(!panel)return;
+ if(!panel.classList.contains('hidden')){panel.classList.add('hidden');return}
+ const today=new Date().toISOString().slice(0,10),items=await api('/calendar?'+new URLSearchParams({from:today,to:today}));
+ panel.innerHTML=`<div class="mini-calendar-head"><strong>حجوزات اليوم · ${dateFmt(today)}</strong><button class="icon-btn" onclick="toggleMiniCalendar()">×</button></div><p>عدد الحجوزات: <strong>${items.length}</strong></p>${items.length?items.map(b=>`<button class="mini-calendar-item" onclick="openBooking(${b.id})"><strong>${escapeHtml(b.hall_name)}</strong><span>${escapeHtml(b.event_period)} · ${escapeHtml(b.groom_name||'—')} / ${escapeHtml(b.bride_name||'—')}</span></button>`).join(''):'<p class="muted">لا توجد حجوزات اليوم</p>'}<button class="btn primary full" onclick="go('calendar');$('#miniCalendarPanel').classList.add('hidden')">فتح التقويم الكامل</button>`;
+ panel.classList.remove('hidden');
+}
+
+async function refreshNotifications(){
+ try{
+  const d=await api('/notifications');const b=$('#notificationBadge');
+  if(b){b.textContent=d.unread||0;b.classList.toggle('hidden',!d.unread)}
+  const newest=(d.items||[]).reduce((max,n)=>Math.max(max,Number(n.id)||0),0);
+  if(!notificationsInitialized){lastNotificationId=newest;notificationsInitialized=true}
+  else if(newest>lastNotificationId){
+    const fresh=(d.items||[]).filter(n=>Number(n.id)>lastNotificationId).sort((a,b)=>Number(a.id)-Number(b.id));
+    fresh.forEach(n=>toast(`${n.title}: ${n.message}` ,n.notification_type==='danger'));
+    lastNo
