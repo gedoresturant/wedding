@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import bcrypt from "npm:bcryptjs@2.4.3";
+import QRCode from "npm:qrcode@1.5.4";
 const SUPABASE_URL=Deno.env.get("SUPABASE_URL")!, SERVICE=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, enc=new TextEncoder();
 const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, apikey, content-type","Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"};
 const db=createClient(SUPABASE_URL,SERVICE,{auth:{persistSession:false}});
@@ -46,6 +47,26 @@ Deno.serve(async(req)=>{
  const bulk=path.match(/^\/menu-groups\/(\d+)\/items\/bulk$/);if(bulk&&req.method==="POST"){const body=await req.json(),items=Array.isArray(body.items)?body.items:[];if(!items.length)return json({error:"أضف صنفًا واحدًا على الأقل"},400);const rows=items.map((i:any)=>({company_id:companyId,menu_group_id:Number(bulk[1]),name:String(i.name||""),category:String(i.category||"أخرى"),quantity:String(i.quantity||""),notes:String(i.notes||"")}));const {data,error}=await db.from("menu_items").insert(rows).select();if(error)throw error;return json(data,201)}
  if(path==="/payments"&&req.method==="POST"){const b=await req.json();const {data:p,error}=await db.from("payments").insert({...b,company_id:companyId,paid_by:userId}).select().single();if(error)throw error;const {data:all,error:ae}=await db.from("payments").select("amount").eq("company_id",companyId).eq("booking_id",p.booking_id);if(ae)throw ae;const total=(all||[]).reduce((n:number,v:any)=>n+Number(v.amount||0),0);const {error:be}=await db.from("bookings").update({paid_total:total,updated_at:new Date().toISOString()}).eq("company_id",companyId).eq("id",p.booking_id);if(be)throw be;return json(p,201)}
 
+
+ const statusRoute=path.match(/^\/bookings\/(\d+)\/status$/);
+ if(statusRoute&&req.method==="PATCH"){
+  const id=Number(statusRoute[1]),body=await req.json(),status=String(body.status||"");
+  if(!["مبدئي","مؤكد","ملغي","مرفوض","تمت المناسبة"].includes(status))return json({error:"حالة غير صحيحة"},400);
+  const {data:b,error:be}=await db.from("bookings").select("id,event_date,invitation_token").eq("company_id",companyId).eq("id",id).maybeSingle();if(be)throw be;if(!b)return json({error:"الحجز غير موجود"},404);
+  const update:any={status,updated_at:new Date().toISOString()};
+  if(status==="مؤكد"&&!b.invitation_token){const bytes=crypto.getRandomValues(new Uint8Array(24));const token=Array.from(bytes).map(v=>v.toString(16).padStart(2,"0")).join("");const expiry=new Date(String(b.event_date)+"T12:00:00Z");expiry.setUTCDate(expiry.getUTCDate()+1);update.invitation_token=token;update.invitation_expires_at=expiry.toISOString().slice(0,10)+"T00:00:00";}
+  const {error}=await db.from("bookings").update(update).eq("company_id",companyId).eq("id",id);if(error)throw error;return json({ok:true})
+ }
+ const invitation=path.match(/^\/bookings\/(\d+)\/invitation$/);
+ if(invitation&&req.method==="GET"){
+  const id=Number(invitation[1]);const {data:b,error:be}=await db.from("bookings").select("*").eq("company_id",companyId).eq("id",id).maybeSingle();if(be)throw be;if(!b)return json({error:"الحجز غير موجود"},404);if(b.status!=="مؤكد")return json({error:"يجب تأكيد الحجز أولًا لإصدار كارت الدعوة"},400);
+  let token=b.invitation_token,expires=b.invitation_expires_at;
+  if(!token){const bytes=crypto.getRandomValues(new Uint8Array(24));token=Array.from(bytes).map(v=>v.toString(16).padStart(2,"0")).join("");const expiry=new Date(String(b.event_date)+"T12:00:00Z");expiry.setUTCDate(expiry.getUTCDate()+1);expires=expiry.toISOString().slice(0,10)+"T00:00:00";const {error}=await db.from("bookings").update({invitation_token:token,invitation_expires_at:expires}).eq("company_id",companyId).eq("id",id).is("invitation_token",null);if(error)throw error;}
+  const [{data:c},{data:h},{data:co}]=await Promise.all([db.from("customers").select("groom_name,bride_name").eq("company_id",companyId).eq("id",b.customer_id).maybeSingle(),db.from("halls").select("name,venue").eq("company_id",companyId).eq("id",b.hall_id).maybeSingle(),db.from("companies").select("name,logo_url").eq("id",companyId).maybeSingle()]);
+  const scan_url=Deno.env.get("SUPABASE_URL")+"/functions/v1/erp-web/entry/"+token;
+  const qr_data_url=await QRCode.toDataURL(scan_url,{errorCorrectionLevel:"H",margin:2,width:320,color:{dark:"#17243b",light:"#ffffff"}});
+  return json({id,event_date:b.event_date,event_period:b.event_period,invitation_token:token,invitation_expires_at:expires,invitation_used_at:b.invitation_used_at,groom_name:c?.groom_name||"",bride_name:c?.bride_name||"",hall_name:h?.name||"",venue:h?.venue||"",company_name:co?.name||"",logo_url:co?.logo_url||"",scan_url,qr_data_url})
+ }
  const bd=path.match(/^\/bookings\/(\d+)$/);
  if(bd&&req.method==="GET"){
   const id=Number(bd[1]);const {data:b,error}=await db.from("bookings").select("*").eq("company_id",companyId).eq("id",id).maybeSingle();if(error)throw error;if(!b||b.deleted_at)return json({error:"الحجز غير موجود"},404);
