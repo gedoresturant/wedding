@@ -2,8 +2,8 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 // Configure with the project's public URL and publishable/anon key in this file.
 // Never put a service_role key in a browser application.
-const SUPABASE_URL = 'SET_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'SET_SUPABASE_PUBLISHABLE_KEY';
+const SUPABASE_URL = 'https://ugvtuxuimjcshqckgepi.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_5o76vxY22PQKF3_G1aQpRA_48KOuZlf';
 const app = document.querySelector('#app');
 let db = null, session = null, profile = null, page = 'dashboard', halls = [], bookings = [], payments = [], customers = [];
 const money = n => new Intl.NumberFormat('ar-EG',{style:'currency',currency:'EGP',maximumFractionDigits:2}).format(Number(n||0));
