@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
       if (!customer || !hall) return reply(400, { error: "العميل أو القاعة غير موجودين ضمن الشركة" });
       const { data: conflicts, error: conflictError } = await admin.from("bookings").select("id")
         .eq("company_id", companyId).eq("hall_id", hallId).eq("event_date", eventDate)
-        .eq("event_period", eventPeriod).is("deleted_at", null).limit(1);
+        .eq("event_period", eventPeriod).or("deleted_at.is.null,deleted_at.eq.").limit(1);
       if (conflictError) throw conflictError;
       if (conflicts?.length) return reply(409, { error: "القاعة محجوزة بالفعل في نفس التاريخ والفترة" });
       const { data, error } = await admin.from("bookings").insert({
