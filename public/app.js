@@ -8,7 +8,7 @@ const statusLabel = s => ({new:'استفسار جديد',interested:'مهتم',v
 const API_BASE='https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-api';
 async function api(url, options={}) {
  const token=sessionStorage.getItem('wedding_erp_token')||'';
- const opts={...options,headers:{'Content-Type':'application/json','Authorization':token?'Bearer '+token:'','apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVndnR1eHVpbWpjc2hxY2tnZXBpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzMzM3NjEsImV4cCI6MjEwNzkwOTc2MX0.jodjW2DfDqGpGLHWyxA5x5VhCCIHTBat1x81oEqP5q4',...(options.headers||{})}};
+ const opts={...options,headers:{'Content-Type':'application/json','Authorization':token?'Bearer '+token:'','apikey':'sb_publishable_5o76vxY22PQKF3_G1aQpRA_48KOuZlf',...(options.headers||{})}};
  if(opts.body && typeof opts.body!=='string')opts.body=JSON.stringify(opts.body);
  const res=await fetch(API_BASE+url,opts);
  if(res.status===204)return null;
