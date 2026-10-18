@@ -24,3 +24,6 @@ jobs:
 
       - name: Check published website
         run: curl --fail --silent --show-error https://gedoresturant.github.io/wedding/ | grep -q 'id="loginForm"'
+
+      - name: Check GitHub raw asset CORS
+        run: curl --silent --show-error --head https://raw.githubusercontent.com/gedoresturant/wedding/feat/github-pages-supabase-only/public/app.js | grep -i 'access-control-allow-origin'
