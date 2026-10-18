@@ -1,0 +1,17 @@
+name: Verify Supabase ERP live endpoints
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Supabase-hosted ERP page
+        run: curl --fail --silent --show-error https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-web | grep -q 'raw.githubusercontent.com'
+      - name: Check API database connectivity
+        run: curl --fail --silent --show-error https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-api/health | grep -q '"database":true'
+      - name: Check GitHub source CORS
+        run: curl --silent --show-error --head https://raw.githubusercontent.com/gedoresturant/wedding/feat/github-pages-supabase-only/public/app.js | grep -i 'access-control-allow-origin'
