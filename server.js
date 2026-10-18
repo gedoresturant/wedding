@@ -8,6 +8,8 @@ const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
+const { createClient } = require('@supabase/supabase-js');
+const { makeSupabaseSync } = require('./supabase-sync');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -1334,7 +1336,7 @@ app.delete('/api/menu-items/:id',auth,admin,(req,res)=>{
  db.prepare('DELETE FROM menu_items WHERE id=? AND company_id=?').run(item.id,req.user.company_id);logAction(req.user,'حذف صنف منيو','menu_item',item.id,item.name);res.json({ok:true});
 });
 
-app.get('/healthz',(req,res)=>res.json({ok:true,service:'wedding-halls-erp'}));
+app.get('/healthz',(req,res)=>res.json({ok:true,service:'wedding-halls-erp',supabaseSync: typeof supabaseSyncState === 'undefined' ? {enabled:false,status:'starting'} : supabaseSyncState}));
 
 app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
 app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'خطأ داخلي في الخادم'});});
@@ -1367,4 +1369,34 @@ app.post('/entry/:token/use', (req,res)=>{
  res.redirect(303,`/entry/${encodeURIComponent(token)}`);
 });
 
+let supabaseSyncState = { enabled: false, status: 'disabled', lastSyncAt: null, lastError: null };
+if (String(process.env.SUPABASE_SYNC_ENABLED || 'false').toLowerCase() === 'true') {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('[Supabase sync] Enabled but SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing.');
+    supabaseSyncState = { enabled: true, status: 'configuration_error', lastSyncAt: null, lastError: 'Missing server-side Supabase credentials' };
+  } else {
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    const sync = makeSupabaseSync(db, supabase);
+    const intervalMs = Math.max(10000, Number(process.env.SUPABASE_SYNC_INTERVAL_MS || 60000));
+    const runSync = async () => {
+      const result = await sync.syncOnce();
+      supabaseSyncState = {
+        enabled: true,
+        status: result.ok ? 'ok' : 'error',
+        lastSyncAt: new Date().toISOString(),
+        lastError: result.ok ? null : result.error,
+        lastSyncedRecords: result.synced || 0
+      };
+    };
+    setTimeout(() => {
+      runSync().catch(err => console.error('[Supabase sync]', err.message || err));
+      setInterval(() => runSync().catch(err => console.error('[Supabase sync]', err.message || err)), intervalMs);
+    }, 5000);
+  }
+}
+app.get('/healthz', (req,res) => res.json({ ok:true, service:'wedding-halls-erp', supabaseSync: supabaseSyncState }));
 app.listen(PORT,HOST,()=>console.log(`Wedding Halls ERP running on http://localhost:${PORT} (LAN host: ${HOST})`));
