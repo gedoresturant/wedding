@@ -13,7 +13,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-change-this-secret-before-deployment';
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_PATH = path.join(DATA_DIR, 'wedding-halls.sqlite');
 const PENDING_RESTORE_PATH = path.join(DATA_DIR, 'pending-restore.sqlite');
@@ -1333,6 +1333,8 @@ app.delete('/api/menu-items/:id',auth,admin,(req,res)=>{
  const item=scoped('menu_items',req.user.company_id,req.params.id);if(!item)return res.status(404).json({error:'الصنف غير موجود'});
  db.prepare('DELETE FROM menu_items WHERE id=? AND company_id=?').run(item.id,req.user.company_id);logAction(req.user,'حذف صنف منيو','menu_item',item.id,item.name);res.json({ok:true});
 });
+
+app.get('/healthz',(req,res)=>res.json({ok:true,service:'wedding-halls-erp'}));
 
 app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
 app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'خطأ داخلي في الخادم'});});
