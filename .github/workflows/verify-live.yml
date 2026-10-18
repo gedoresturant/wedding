@@ -15,7 +15,7 @@ jobs:
       - name: Check online loader syntax
         run: node --check online/app.js
       - name: Check published login page
-        run: curl --fail --silent --show-error https://gedoresturant.github.io/wedding/ | grep -q 'id="loginForm"'
+        run: curl --fail --silent --show-error https://gedoresturant.github.io/wedding/online/ | grep -q 'id="loginForm"'
       - name: Check app loader is published
         run: curl --fail --silent --show-error https://gedoresturant.github.io/wedding/app.js | grep -q 'raw.githubusercontent.com'
       - name: Check GitHub source CORS
