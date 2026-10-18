@@ -3,7 +3,7 @@ services:
     name: wedding-halls-erp
     runtime: node
     plan: starter
-    buildCommand: npm install
+    buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /healthz
     disk:
@@ -19,12 +19,3 @@ services:
         generateValue: true
       - key: PORT
         value: 10000
-
-      - key: SUPABASE_SYNC_ENABLED
-        value: "true"
-      - key: SUPABASE_SYNC_INTERVAL_MS
-        value: "60000"
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
