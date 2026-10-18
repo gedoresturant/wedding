@@ -17,7 +17,7 @@ jobs:
       - name: Check published login page
         run: curl --fail --silent --show-error https://gedoresturant.github.io/wedding/online/ | grep -q 'id="loginForm"'
       - name: Check app loader is published
-        run: curl --fail --silent --show-error https://gedoresturant.github.io/wedding/app.js | grep -q 'raw.githubusercontent.com'
+        run: curl --fail --silent --show-error https://gedoresturant.github.io/wedding/online/app.js | grep -q 'raw.githubusercontent.com'
       - name: Check GitHub source CORS
         run: curl --silent --show-error --head https://raw.githubusercontent.com/gedoresturant/wedding/feat/github-pages-supabase-only/public/app.js | grep -i 'access-control-allow-origin'
       - name: Check Supabase database API
