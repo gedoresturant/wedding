@@ -49,3 +49,4 @@ jobs:
           echo "$scan_code guest invitation page"
           test "$scan_code" = "200"
           grep -q 'التحقق من دعوة الفرح' /tmp/entry.html
+
