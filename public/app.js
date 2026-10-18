@@ -5,14 +5,18 @@ let lastNotificationId=0,notificationsInitialized=false;
 const money = n => new Intl.NumberFormat('ar-EG',{style:'currency',currency:'EGP',maximumFractionDigits:0}).format(Number(n)||0);
 const dateFmt = d => d ? new Date(d+'T12:00:00').toLocaleDateString('ar-EG',{day:'2-digit',month:'short',year:'numeric'}) : '—';
 const statusLabel = s => ({new:'استفسار جديد',interested:'مهتم',visit:'زيارة مباشرة',initial:'حجز مبدئي',booked:'تم الحجز',lost:'لم يتم الحجز',مبدئي:'مبدئي',مؤكد:'مؤكد',ملغي:'ملغي',مرفوض:'مرفوض','تمت المناسبة':'تمت المناسبة'})[s]||s||'—';
+const API_BASE='https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-api';
 async function api(url, options={}) {
- const opts={...options,headers:{'Content-Type':'application/json',...(options.headers||{})}};
+ const token=sessionStorage.getItem('wedding_erp_token')||'';
+ const opts={...options,headers:{'Content-Type':'application/json','Authorization':token?'Bearer '+token:'','apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVndnR1eHVpbWpjc2hxY2tnZXBpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzMzM3NjEsImV4cCI6MjEwNzkwOTc2MX0.jodjW2DfDqGpGLHWyxA5x5VhCCIHTBat1x81oEqP5q4',...(options.headers||{})}};
  if(opts.body && typeof opts.body!=='string')opts.body=JSON.stringify(opts.body);
- const res=await fetch('/api'+url,{credentials:'same-origin',...opts});
+ const res=await fetch(API_BASE+url,opts);
  if(res.status===204)return null;
  const type=res.headers.get('content-type')||'';
  if(!type.includes('application/json')){if(!res.ok)throw new Error('فشل الاتصال بالخادم');return res}
- const data=await res.json();if(!res.ok)throw new Error(data.error||'حدث خطأ');return data;
+ const data=await res.json();if(!res.ok)throw new Error(data.error||data.message||'حدث خطأ');
+ if(url.startsWith('/auth/login')&&data.token)sessionStorage.setItem('wedding_erp_token',data.token);
+ return data;
 }
 function toast(msg,bad=false){const n=document.createElement('div');n.className='toast'+(bad?' bad':'');n.textContent=msg;$('#toastRoot').append(n);setTimeout(()=>n.remove(),3500)}
 function escapeHtml(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -41,7 +45,7 @@ function showApp(){
  refreshNotifications();
 }
 $('#loginForm').onsubmit=async e=>{e.preventDefault();$('#loginError').textContent='';const data=Object.fromEntries(new FormData(e.target).entries());try{const d=await api('/auth/login',{method:'POST',body:data});state.user=d.user;state.company=d.company;showApp();await renderPage()}catch(err){$('#loginError').textContent=err.message}};
-$('#logoutBtn').onclick=async()=>{await api('/auth/logout',{method:'POST'});state.user=null;$('#app').classList.add('hidden');$('#loginScreen').classList.remove('hidden')};
+$('#logoutBtn').onclick=async()=>{try{await api('/auth/logout',{method:'POST'})}finally{sessionStorage.removeItem('wedding_erp_token')}state.user=null;$('#app').classList.add('hidden');$('#loginScreen').classList.remove('hidden')};
 $('#menuToggle').onclick=()=>$('#sidebar').classList.toggle('open');
 document.addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b){go(b.dataset.page);$('#sidebar').classList.remove('open')}});
 $('#quickAdd').onclick=()=>quickAdd();
