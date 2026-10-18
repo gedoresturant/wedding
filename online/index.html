@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#071426">
+<title>Wedding Halls ERP</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="loginScreen" class="login-wrap">
+  <div class="login-card">
+    <div class="brand-mark">✦</div><p class="eyebrow">نظام إدارة القاعات والحجوزات</p>
+    <h1>إدارة قاعات الأفراح</h1><p class="muted">إدارة العملاء والحجوزات والتحصيلات من مكان واحد</p>
+    <form id="loginForm">
+      <label>معرّف الشركة<input name="companySlug" value="wedding-halls" required></label>
+      <label>اسم المستخدم<input name="username" value="admin" required autocomplete="username"></label>
+      <label>كلمة المرور<input name="password" type="password" value="ChangeMe@12345" required autocomplete="current-password"></label>
+      <button class="btn primary full">تسجيل الدخول</button>
+    </form>
+    <p class="hint">حساب المدير الأول: admin / ChangeMe@12345 — غيّر كلمة المرور فور أول دخول قبل إدخال بيانات حقيقية.</p>
+    <div id="loginError" class="error"></div>
+  </div>
+</div>
+<div id="app" class="app hidden">
+  <header class="topbar">
+    <button class="icon-btn mobile-menu" id="menuToggle" aria-label="القائمة">☰</button>
+    <div class="brand"><div class="brand-logo" id="brandLogo">✦</div><div><strong id="companyName">إدارة قاعات الأفراح</strong><small>نظام إدارة العملاء والحجوزات</small></div></div>
+    <div class="top-actions"><button class="icon-btn" id="miniCalendarBtn" title="ملخص حجوزات اليوم" onclick="toggleMiniCalendar()">📅</button><button class="icon-btn" id="notificationsBtn" title="الإشعارات" onclick="openNotifications()">🔔<span id="notificationBadge" class="notification-badge hidden">0</span></button><span id="userBadge" class="user-badge"></span><button class="icon-btn" id="logoutBtn" title="تسجيل الخروج">↪</button></div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="side-label">القائمة الرئيسية</div>
+      <button class="nav-item active" data-page="dashboard">▦ <span>لوحة التحكم</span></button>
+      <button class="nav-item" data-page="customers">♙ <span>العملاء والاستفسارات</span></button>
+      <button class="nav-item" data-page="followups">◷ <span>المتابعات</span><span id="followBadge" class="nav-badge">0</span></button>
+      <button class="nav-item" data-page="bookings">▣ <span>الحجوزات</span></button>\n      <button class="nav-item" data-page="calendar">▦ <span>تقويم الحجوزات</span></button>
+      <button class="nav-item" data-page="halls">⌂ <span>القاعات</span></button>\n      <button class="nav-item" data-page="packages">▧ <span>الباكدجات والأسعار</span></button>
+      <button class="nav-item" data-page="paragraphs">＋ <span>الإضافات</span></button>
+      <button class="nav-item" data-page="menus">☕ <span>مجموعات المنيو</span></button>
+<button class="nav-item" data-page="instructions">☷ <span>التعليمات</span></button>
+<button class="nav-item" data-page="contracts">▤ <span>كتابة العقود</span></button>
+      <button class="nav-item" data-page="finance">▤ <span>الحسابات والتحصيل</span></button>\n      <button class="nav-item" data-page="contractors">♧ <span>المتعهدون</span></button>\n      <button class="nav-item" data-page="costs">↘ <span>التكاليف</span></button>\n      <button class="nav-item" data-page="cashbox">▤ <span>الخزنة</span></button>\n      <button class="nav-item superadmin-only" data-page="discountRequests">％ <span>طلبات الخصم</span><span id="discountBadge" class="nav-badge">0</span></button>
+      <button class="nav-item" data-page="reports">▥ <span>التقارير</span></button>
+      <button class="nav-item admin-only" data-page="users">♧ <span>المستخدمون والصلاحيات</span></button>
+      <button class="nav-item admin-only" data-page="logs">☷ <span>سجل العمليات</span></button>
+      <button class="nav-item admin-only" data-page="settings">⚙ <span>إعدادات الشركة</span></button>
+      <div class="sidebar-bottom"><span class="status-dot"></span> البيانات محفوظة في قاعدة البيانات</div>
+    </aside>
+    <main class="main" id="mainContent"><div class="loading">جاري تحميل النظام...</div></main>
+  </div>
+  <nav class="mobile-nav">
+    <button data-page="dashboard" class="active">⌂<small>الرئيسية</small></button>
+    <button data-page="bookings">▣<small>الحجوزات</small></button>
+    <button id="quickAdd" class="quick-add">＋</button>
+    <button data-page="customers">♙<small>العملاء</small></button>
+    <button data-page="followups">♧<small>المتابعات</small></button>
+  </nav>
+</div>
+<div id="miniCalendarPanel" class="mini-calendar-panel hidden"></div>\n<div id="modalRoot"></div>
+<div id="toastRoot" class="toast-root"></div>
+<script src="app.js"></script>
+</body></html>
