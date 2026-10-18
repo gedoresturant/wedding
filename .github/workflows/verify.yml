@@ -21,3 +21,6 @@ jobs:
           response=$(curl --silent --show-error --write-out "\nHTTP_STATUS:%{http_code}\n" https://ugvtuxuimjcshqckgepi.supabase.co/functions/v1/erp-api/health)
           echo "$response"
           echo "$response" | grep -q "HTTP_STATUS:200"
+
+      - name: Check published website
+        run: curl --fail --silent --show-error https://gedoresturant.github.io/wedding/ | grep -q 'id="loginForm"'
