@@ -1,0 +1,26 @@
+{
+  "name": "wedding-halls-erp",
+  "version": "1.4.0",
+  "private": true,
+  "description": "Multi-tenant wedding halls management ERP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test",
+    "check": "node --check server.js && node --check public/app.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.5.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "qrcode": "^1.5.4",
+    "@supabase/supabase-js": "^2.57.0"
+  }
+}
